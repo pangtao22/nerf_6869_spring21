@@ -1,0 +1,36 @@
+<sdf version="1.7">
+  <model name="M">
+    <link name="base_link">
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>4.122e-01</ixx>
+          <ixy>0.000e+00</ixy>
+          <ixz>0.000e+00</ixz>
+          <iyy>7.478e-01</iyy>
+          <iyz>0.000e+00</iyz>
+          <izz>3.773e-01</izz>
+        </inertia>
+      </inertial>
+      <visual name="M_visual">
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>M_processed.obj</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1.0 0.0 0.0 1.0</diffuse>
+        </material>
+      </visual>
+      <collision name="M_collision">
+        <pose>2.615e-03 0.000e+00 -2.428e-02 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.068e+00 5.000e-01 2.167e+00</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,36 @@
+<sdf version="1.7">
+  <model name="T">
+    <link name="base_link">
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>4.122e-01</ixx>
+          <ixy>0.000e+00</ixy>
+          <ixz>0.000e+00</ixz>
+          <iyy>6.373e-01</iyy>
+          <iyz>0.000e+00</iyz>
+          <izz>2.667e-01</izz>
+        </inertia>
+      </inertial>
+      <visual name="T_visual">
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>T_processed.obj</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.96 0.74 0.086 1.0</diffuse>
+        </material>
+      </visual>
+      <collision name="T_collision">
+        <pose>7.588e-04 0.000e+00 3.528e-01 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1.718e+00 5.000e-01 2.167e+00</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
