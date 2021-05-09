@@ -1,8 +1,10 @@
+import json
 from typing import *
 import os
 import pathlib
 
 import numpy as np
+import cv2
 import matplotlib.pyplot as plt
 
 from pydrake.all import (MultibodyPlant, Parser, DiagramBuilder,
@@ -106,20 +108,44 @@ sim = Simulator(diagram, context)
 sim.Initialize()
 
 #%%
-data_dict = {}
-prefix = ""
+K = scene_camera_properties.core().intrinsics().intrinsic_matrix()
+data = {
+    "camera_intrinsics": K.tolist(),
+    "w": scene_camera_properties.core().intrinsics().width(),
+    "h": scene_camera_properties.core().intrinsics().height(),
+}
 
+data_list = []
+prefix = "validation"
 r = 2.8
-X_WB = RigidTransform()
-angle = np.random.rand() * np.pi
-X_WB.set_translation(r * np.array([np.cos(angle), np.sin(angle), 0]))
-X_WB.set_rotation(
-    RollPitchYaw(-np.pi/2, 0, angle + np.pi/2).ToRotationMatrix())
-plant.SetFreeBodyPose(context_plant, camera_body, X_WB)
-meshcat_vis.DoPublish(context_meshcat, [])
 
-scene_image = scene_camera.color_image_output_port().Eval(
-    context_scene_camera).data
-plt.imshow(scene_image)
-plt.show()
+for i in range(100):
+    X_WC = RigidTransform()
+    angle = np.random.rand() * np.pi
+    X_WC.set_translation(r * np.array([np.cos(angle), np.sin(angle), 0]))
+    X_WC.set_rotation(
+        RollPitchYaw(-np.pi/2, 0, angle + np.pi/2).ToRotationMatrix())
+    plant.SetFreeBodyPose(context_plant, camera_body, X_WC)
+    meshcat_vis.DoPublish(context_meshcat, [])
 
+    scene_image = scene_camera.color_image_output_port().Eval(
+        context_scene_camera).data
+    file_path = os.path.join("data", prefix, "img_{:03d}.png".format(i))
+    assert cv2.imwrite(
+        os.path.join(os.getcwd(), file_path),
+        cv2.cvtColor(scene_image, cv2.COLOR_RGB2BGR))
+
+    data_frame = {
+        "file_path": file_path,
+        "X_WC": X_WC.GetAsMatrix4().tolist(),
+    }
+    data_list.append(data_frame)
+    print(i)
+    # plt.imshow(scene_image)
+    # plt.show()
+
+data["frames"] = data_list
+
+#%%
+with open(os.path.join("data", "{}.json".format(prefix)), "w") as file:
+    json.dump(data, file, indent=4)
