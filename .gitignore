@@ -3,4 +3,6 @@
 *.gz
 *.pdf
 data
+results
 __pycache__
+*.npz
