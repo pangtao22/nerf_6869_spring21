@@ -189,10 +189,6 @@ def train_nerf(model: Nerf, dataloader, optimizer,
                 img = images[0]
                 n_channels = img.shape[0]
                 img = img.permute([1, 2, 0]).reshape(-1, n_channels).to(device)
-                if n_channels == 4:
-                    # Lego dataset, RGBA
-                    img = img[..., :3] * img[..., 3][..., None]
-
                 loss = mse_loss(rgb, img[ray_indices])  # take RGB.
 
                 loss.backward()

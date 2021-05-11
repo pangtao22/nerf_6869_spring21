@@ -8,8 +8,8 @@ from lego_dataset import LegoDataset
 
 # %% Dataloader
 # Original resolution is (800, 800).
-H_img = 100
-W_img = 100
+H_img = 400
+W_img = 400
 data_transform = transforms.Compose([
     transforms.Resize((H_img, W_img)),
     transforms.ToTensor(),
@@ -21,6 +21,7 @@ focal = lego_dataset.get_focal() / (lego_dataset.get_W() / W_img)
 dataloader = torch.utils.data.DataLoader(
     lego_dataset, batch_size=1, shuffle=True)
 
+
 # %% look at one data point.
 images, X_WCs = iter(dataloader).next()
 np_img = images[0].numpy()
@@ -28,9 +29,20 @@ np_img = np.transpose(np_img, (1, 2, 0))
 
 plt.figure(dpi=200)
 # This dataset comes in RGBA.
-plt.imshow(np_img[..., :3] * np_img[..., 3][..., None])
+plt.imshow(np_img)
 plt.axis('off')
 plt.show()
+
+
+#%%
+# import meshcat
+# from pydrake.systems.meshcat_visualizer import AddTriad
+#
+# vis = meshcat.Visualizer('tcp://127.0.0.1:6000')
+# for i, (images, X_WCs) in enumerate(dataloader):
+#     AddTriad(vis, str(i), "lego", length=0.15, radius=0.005, opacity=1)
+#     vis['lego/{}'.format(i)].set_transform(X_WCs[0].numpy().astype(float))
+#     print(i, images.shape)
 
 
 # %% train network
@@ -50,10 +62,10 @@ model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
 best_model_weights = train_nerf(model, dataloader, optimizer,
-                                n_epochs=num_epochs, n_rays=4096,
-                                n_samples_per_ray=64,
+                                n_epochs=num_epochs, n_rays=2048,
+                                n_samples_per_ray=128,
                                 H_img=H_img, W_img=W_img, focal=focal,
                                 X_WC_validation=X_WC_validation,
-                                epochs_per_plot=1, lr_decay=False)
+                                epochs_per_plot=10, lr_decay=True)
 
 torch.save(best_model_weights, 'weights_best{}.pt'.format(time.asctime()))

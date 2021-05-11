@@ -18,42 +18,36 @@ class LegoDataset(Dataset):
         data_folder_path = os.path.join(os.getcwd(), "data", "lego")
         pose_file_path = os.path.join(
             data_folder_path,  'transforms_{}.json'.format(data_subfolder_name))
-        self.img_folder_path = os.path.join(data_folder_path,
-                                            data_subfolder_name)
         with open(pose_file_path, "r") as f:
-            self.intrinsics_and_pose = json.load(f)
-
-        img_file_names = []
-        for name in os.listdir(self.img_folder_path):
-            if name.endswith('png'):
-                img_file_names.append(name)
-        img_file_names.sort()
+            data_dict = json.load(f)
 
         # load images here.
         self.images = []
-        for img_file_name in img_file_names:
-            img_path = os.path.join(self.img_folder_path, img_file_name)
-            self.images.append(PIL.Image.open(img_path))
+        self.poses = []
+        for frame in data_dict['frames']:
+            img_path = os.path.join(data_folder_path,
+                                    frame["file_path"][2:] + '.png')
+            self.images.append(PIL.Image.open(img_path).convert('RGB'))
+            self.poses.append(
+                torch.tensor(frame['transform_matrix'], dtype=torch.float32))
+
+        camera_angle_x = data_dict['camera_angle_x']
+        self.focal = self.images[0].width / 2 / np.tan(camera_angle_x / 2)
 
     def get_focal(self):
-        camera_angle_x = self.intrinsics_and_pose['camera_angle_x']
-        W_img = self.images[0].size[0]
-        return W_img / 2 / np.tan(camera_angle_x / 2)
+        return self.focal
 
     def get_H(self):
-        return self.images[0].size[1]
+        return self.images[0].height
 
     def get_W(self):
-        return self.images[0].size[0]
+        return self.images[0].width
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
-        image = self.transform(self.images[idx])
-        X_WC = torch.tensor(
-            self.intrinsics_and_pose['frames'][idx]['transform_matrix'])
-        return image, X_WC
+        return self.transform(self.images[idx]), self.poses[idx]
 
 
 H_img = 400
