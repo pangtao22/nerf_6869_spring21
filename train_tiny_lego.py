@@ -1,11 +1,7 @@
-import copy
-
 from torchvision import transforms
-import matplotlib.pyplot as plt
 
 from nerf_torch import *
 from tiny_lego_dataset import TinyLegoDataset
-
 
 # %% TinyNerfDataloader
 H = 100
@@ -54,7 +50,11 @@ num_epochs = 10
 
 model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
              skips={5})
+optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
-best_model_weights = train_nerf(model, dataloader, num_epochs,
+best_model_weights = train_nerf(model, dataloader, optimizer,
+                                n_epochs=num_epochs, n_rays=4096,
+                                n_samples_per_ray=64,
                                 H_img=H, W_img=W, focal=focal,
-                                X_WC_validation=X_WC_validation)
+                                X_WC_validation=X_WC_validation,
+                                lr_decay=False)

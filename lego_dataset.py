@@ -3,7 +3,9 @@ import PIL
 import json
 
 import torch
+import numpy as np
 from torch.utils.data import Dataset
+from torchvision import transforms
 
 
 class LegoDataset(Dataset):
@@ -33,22 +35,32 @@ class LegoDataset(Dataset):
             img_path = os.path.join(self.img_folder_path, img_file_name)
             self.images.append(PIL.Image.open(img_path))
 
-    def get_W(self):
-        return self.intrinsics_and_pose["w"]
+    def get_focal(self):
+        camera_angle_x = self.intrinsics_and_pose['camera_angle_x']
+        W_img = self.images[0].size[0]
+        return W_img / 2 / np.tan(camera_angle_x / 2)
 
     def get_H(self):
-        return self.intrinsics_and_pose["h"]
+        return self.images[0].size[1]
 
-    def get_focal(self):
-        K = self.intrinsics_and_pose["camera_intrinsics"]
-        return K[0][0]
+    def get_W(self):
+        return self.images[0].size[0]
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
         image = self.transform(self.images[idx])
-        X_WC = torch.tensor(self.intrinsics_and_pose['frames'][idx]['X_WC'])
+        X_WC = torch.tensor(
+            self.intrinsics_and_pose['frames'][idx]['transform_matrix'])
         return image, X_WC
 
 
+H_img = 400
+W_img = 400
+data_transform = transforms.Compose([
+    transforms.Resize((H_img, W_img)),
+    transforms.ToTensor(),
+])
+
+lego_dataset = LegoDataset("train", data_transform)

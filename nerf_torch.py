@@ -14,6 +14,42 @@ else:
     print("WARNING: Could not find GPU! Using CPU only")
 
 
+class Nerf(torch.nn.Module):
+    def __init__(self, D_network: int, W_network: int,
+                 l_embed: int, skips: set):
+        super(Nerf, self).__init__()
+        self.D_network = D_network
+        self.W_network = W_network
+        self.l_embed = l_embed
+
+        self.n_input = 3 * (1 + 2 * l_embed)
+        layers_list = [torch.nn.Linear(self.n_input, W_network)]
+        for i in range(1, D_network):
+            if i in skips:
+                layers_list.append(
+                    torch.nn.Linear(W_network + self.n_input, W_network))
+            else:
+                layers_list.append(torch.nn.Linear(W_network, W_network))
+        self.linear_layers = torch.nn.ModuleList(layers_list)
+
+        self.output_layer = torch.nn.Linear(W_network, 4)
+        self.skips = skips
+
+    def forward(self, x):
+        """
+        :param x: (self.n_input,)
+        :return:
+        """
+        h = x
+        for i, l in enumerate(self.linear_layers):
+            h = l(h)
+            h = F.relu(h)
+            if i + 1 in self.skips:
+                h = torch.cat([x, h], dim=-1)
+
+        return self.output_layer(h)
+
+
 def encode_position(x, l_embed):
     """
     :param x shape (H * W * n_samples, 3)
@@ -60,7 +96,7 @@ def run_network_on_points(model, pts, batch_size: int):
                       for i in range(0, n_pts, batch_size)])
 
 
-def render_rays(model, rays_o, rays_d, near, far,
+def render_rays(model: Nerf, rays_o, rays_d, near, far,
                 n_samples_per_ray, rand=False):
     n_rays = rays_o.shape[0]
 
@@ -82,7 +118,8 @@ def render_rays(model, rays_o, rays_d, near, far,
 
     # Run network.
     # pts_flat shape: (n_rays * n_samples, 3)
-    pts_flat = encode_position(torch.reshape(pts, [-1, 3]), l_embed=6)
+    pts_flat = encode_position(torch.reshape(pts, [-1, 3]),
+                               l_embed=model.l_embed)
     pts_flat = pts_flat.to(device)
     raw = run_network_on_points(model, pts_flat,
                                 batch_size=min(pts_flat.shape[0], 32 * 1024))
@@ -113,58 +150,24 @@ def render_rays(model, rays_o, rays_d, near, far,
     return rgb_map, depth_map
 
 
-class Nerf(torch.nn.Module):
-    def __init__(self, D_network: int, W_network: int,
-                 l_embed: int, skips: set):
-        super(Nerf, self).__init__()
-        self.D_network = D_network
-        self.W_network = W_network
-
-        self.n_input = 3 * (1 + 2 * l_embed)
-        layers_list = [torch.nn.Linear(self.n_input, W_network)]
-        for i in range(1, D_network):
-            if i in skips:
-                layers_list.append(
-                    torch.nn.Linear(W_network + self.n_input, W_network))
-            else:
-                layers_list.append(torch.nn.Linear(W_network, W_network))
-        self.linear_layers = torch.nn.ModuleList(layers_list)
-
-        self.output_layer = torch.nn.Linear(W_network, 4)
-        self.skips = skips
-
-    def forward(self, x):
-        """
-        :param x: (self.n_input,)
-        :return:
-        """
-        h = x
-        for i, l in enumerate(self.linear_layers):
-            h = l(h)
-            h = F.relu(h)
-            if i + 1 in self.skips:
-                h = torch.cat([x, h], dim=-1)
-
-        return self.output_layer(h)
-
-
-def train_nerf(model: torch.nn.Module, dataloader, num_epochs: int,
-               H_img: int, W_img: int, focal: float, X_WC_validation):
+def train_nerf(model: Nerf, dataloader, optimizer,
+               n_epochs: int, n_rays: int,
+               n_samples_per_ray: int, H_img: int, W_img: int, focal: float,
+               X_WC_validation, epochs_per_plot: int = 1, lr_decay=True):
 
     best_model_weights = copy.deepcopy(model.state_dict())
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     mse_loss = torch.nn.MSELoss()
     scheduler = torch.optim.lr_scheduler.ExponentialLR(
-        optimizer, gamma=10 ** (-0.01))  # gamma**100 = 0.1
+        optimizer, gamma=10 ** (-1 / n_epochs))  # gamma ** n_epochs = 0.1
 
     # keeping track of models.
     loss_history = []
     best_loss = np.inf
 
-    for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
+    for epoch in range(n_epochs):
+        print('-' * 20)
+        print('Epoch {}/{}'.format(epoch, n_epochs - 1))
         print('learning rate: ', optimizer.param_groups[0]['lr'])
 
         model.train()
@@ -177,21 +180,28 @@ def train_nerf(model: torch.nn.Module, dataloader, num_epochs: int,
 
             # forward
             rays_o, rays_d, ray_indices = get_rays(
-                H=H_img, W=W_img, focal=focal, X_WC=X_WC, n_rays=4096)
+                H=H_img, W=W_img, focal=focal, X_WC=X_WC, n_rays=n_rays)
             with torch.set_grad_enabled(True):
                 rgb, depth = render_rays(
                     model=model, rays_o=rays_o, rays_d=rays_d,
-                    near=0.5, far=6.0, n_samples_per_ray=64, rand=True)
+                    near=0.5, far=6.0,
+                    n_samples_per_ray=n_samples_per_ray, rand=True)
+                img = images[0]
+                n_channels = img.shape[0]
+                img = img.permute([1, 2, 0]).reshape(-1, n_channels).to(device)
+                if n_channels == 4:
+                    # Lego dataset, RGBA
+                    img = img[..., :3] * img[..., 3][..., None]
 
-                image = images[0].permute([1, 2, 0]).reshape(-1, 3).to(device)
-                loss = mse_loss(rgb, image[ray_indices])
+                loss = mse_loss(rgb, img[ray_indices])  # take RGB.
 
                 loss.backward()
                 optimizer.step()
 
             running_loss += loss.item()
 
-        scheduler.step()
+        if lr_decay:
+            scheduler.step()
 
         epoch_loss = running_loss / len(dataloader.dataset)
         if epoch_loss < best_loss:
@@ -200,8 +210,12 @@ def train_nerf(model: torch.nn.Module, dataloader, num_epochs: int,
                 best_model_weights = copy.deepcopy(model.state_dict())
 
         loss_history.append(epoch_loss)
+        print("epoch loss: ", epoch_loss)
 
         # render an image and plot loss.
+        if epoch % epochs_per_plot != 0:
+            continue
+
         model.eval()
         with torch.no_grad():
             rays_o, rays_d, ray_indices = get_rays(
@@ -216,6 +230,7 @@ def train_nerf(model: torch.nn.Module, dataloader, num_epochs: int,
         plt.axis('off')
         plt.subplot(122)
         plt.plot(loss_history)
+        plt.title('epoch {}'.format(epoch))
         plt.show()
 
     return best_model_weights
