@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 
 
-class MyTinyNerfDataset(Dataset):
+class TinyLegoDataset(Dataset):
     def __init__(self, transform):
         data = np.load('tiny_nerf_data.npz')
         images = data['images']

@@ -1,15 +1,10 @@
 import copy
 
 import torch
-import torchvision
-import torch.nn.functional as F
-from torchvision import transforms
-from torchvision.io import read_image
-# from pydrake.math import RigidTransform, RollPitchYaw
 import numpy as np
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
-from my_tiny_nerf_dataloader import MyTinyNerfDataset
+from tqdm import tqdm
 
 # Detect if we have a GPU available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -18,46 +13,7 @@ if torch.cuda.is_available():
 else:
     print("WARNING: Could not find GPU! Using CPU only")
 
-# %% TinyNerfDataloader
-H = 100
-W = 100
-data_transform = transforms.Compose([
-    transforms.Resize((H, W)),
-    transforms.ToTensor(),
-])
 
-my_tiny_nerf_dataset = MyTinyNerfDataset(data_transform)
-focal = my_tiny_nerf_dataset.get_focal()
-
-dataloader = torch.utils.data.DataLoader(
-    my_tiny_nerf_dataset, batch_size=1, shuffle=True)
-
-X_WC_validation = my_tiny_nerf_dataset.pose_test
-
-# %% look at one data point.
-images, X_WCs = iter(dataloader).next()
-np_img = images[0].numpy()
-np_img = np.transpose(np_img, (1, 2, 0))
-
-plt.figure(dpi=200)
-plt.imshow(np_img)
-plt.axis('off')
-plt.show()
-
-#%%
-sampled_image = np.zeros_like(np_img)
-sampled_image = sampled_image.reshape((-1, 3))
-idx_selected = np.random.choice(H * W, 4096, replace=False)
-sampled_image[idx_selected] = np_img.reshape((-1, 3))[idx_selected]
-sampled_image.resize((H, W, 3))
-
-plt.figure(dpi=200)
-plt.imshow(sampled_image)
-plt.axis('off')
-plt.show()
-
-
-# %%
 def encode_position(x, l_embed):
     """
     :param x shape (H * W * n_samples, 3)
@@ -158,19 +114,23 @@ def render_rays(model, rays_o, rays_d, near, far,
 
 
 class Nerf(torch.nn.Module):
-    def __init__(self, D: int, W: int, l_embed: int, skips: set):
+    def __init__(self, D_network: int, W_network: int,
+                 l_embed: int, skips: set):
         super(Nerf, self).__init__()
+        self.D_network = D_network
+        self.W_network = W_network
 
         self.n_input = 3 * (1 + 2 * l_embed)
-        layers_list = [torch.nn.Linear(self.n_input, W)]
-        for i in range(1, D):
+        layers_list = [torch.nn.Linear(self.n_input, W_network)]
+        for i in range(1, D_network):
             if i in skips:
-                layers_list.append(torch.nn.Linear(W + self.n_input, W))
+                layers_list.append(
+                    torch.nn.Linear(W_network + self.n_input, W_network))
             else:
-                layers_list.append(torch.nn.Linear(W, W))
+                layers_list.append(torch.nn.Linear(W_network, W_network))
         self.linear_layers = torch.nn.ModuleList(layers_list)
 
-        self.output_layer = torch.nn.Linear(W, 4)
+        self.output_layer = torch.nn.Linear(W_network, 4)
         self.skips = skips
 
     def forward(self, x):
@@ -188,76 +148,74 @@ class Nerf(torch.nn.Module):
         return self.output_layer(h)
 
 
-# %% train network
-D_network = 8
-W_network = 256
-l_embed = 6
+def train_nerf(model: torch.nn.Module, dataloader, num_epochs: int,
+               H_img: int, W_img: int, focal: float, X_WC_validation):
 
-num_epochs = 100
+    best_model_weights = copy.deepcopy(model.state_dict())
+    model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+    mse_loss = torch.nn.MSELoss()
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer, gamma=10 ** (-0.01))  # gamma**100 = 0.1
 
-model = Nerf(D=D_network, W=W_network, l_embed=l_embed, skips={5})
-best_model_weights = copy.deepcopy(model.state_dict())
-model.to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
-mse_loss = torch.nn.MSELoss()
-scheduler = torch.optim.lr_scheduler.ExponentialLR(
-    optimizer, gamma=10**(-0.01))  # gamma**100 = 0.1
+    # keeping track of models.
+    loss_history = []
+    best_loss = np.inf
 
-# keeping track of models.
-loss_history = []
-best_loss = np.inf
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('-' * 10)
+        print('learning rate: ', optimizer.param_groups[0]['lr'])
 
-for epoch in range(num_epochs):
-    print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-    print('-' * 10)
-    print('learning rate: ', optimizer.param_groups[0]['lr'])
+        model.train()
+        running_loss = 0.
+        for images, X_WCs in tqdm(dataloader):
+            # print(i)
+            X_WC = X_WCs[0]
 
-    model.train()
-    running_loss = 0.
-    for i, (images, X_WCs) in enumerate(dataloader):
-        # print(i)
-        X_WC = X_WCs[0]
+            optimizer.zero_grad()
 
-        optimizer.zero_grad()
+            # forward
+            rays_o, rays_d, ray_indices = get_rays(
+                H=H_img, W=W_img, focal=focal, X_WC=X_WC, n_rays=4096)
+            with torch.set_grad_enabled(True):
+                rgb, depth = render_rays(
+                    model=model, rays_o=rays_o, rays_d=rays_d,
+                    near=0.5, far=6.0, n_samples_per_ray=64, rand=True)
 
-        # forward
-        rays_o, rays_d, ray_indices = get_rays(
-            H=H, W=W, focal=focal, X_WC=X_WC, n_rays=4096)
-        with torch.set_grad_enabled(True):
+                image = images[0].permute([1, 2, 0]).reshape(-1, 3).to(device)
+                loss = mse_loss(rgb, image[ray_indices])
+
+                loss.backward()
+                optimizer.step()
+
+            running_loss += loss.item()
+
+        scheduler.step()
+
+        epoch_loss = running_loss / len(dataloader.dataset)
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            with torch.no_grad():
+                best_model_weights = copy.deepcopy(model.state_dict())
+
+        loss_history.append(epoch_loss)
+
+        # render an image and plot loss.
+        model.eval()
+        with torch.no_grad():
+            rays_o, rays_d, ray_indices = get_rays(
+                H_img, W_img, focal, X_WC_validation)
             rgb, depth = render_rays(
                 model=model, rays_o=rays_o, rays_d=rays_d,
                 near=0.5, far=6.0, n_samples_per_ray=64, rand=True)
 
-            image = images[0].permute([1, 2, 0]).reshape(-1, 3).to(device)
-            loss = mse_loss(rgb, image[ray_indices])
+        plt.figure(dpi=200)
+        plt.subplot(121)
+        plt.imshow(rgb.detach().cpu().reshape(H_img, W_img, 3).numpy())
+        plt.axis('off')
+        plt.subplot(122)
+        plt.plot(loss_history)
+        plt.show()
 
-            loss.backward()
-            optimizer.step()
-
-        running_loss += loss.item()
-
-    scheduler.step()
-
-    epoch_loss = running_loss / len(dataloader.dataset)
-    if epoch_loss < best_loss:
-        best_loss = epoch_loss
-        with torch.no_grad():
-            best_model_weights = copy.deepcopy(model.state_dict())
-
-    loss_history.append(epoch_loss)
-
-    # render an image and plot loss.
-    model.eval()
-    with torch.no_grad():
-        rays_o, rays_d, ray_indices = get_rays(H, W, focal, X_WC_validation)
-        rgb, depth = render_rays(
-            model=model, rays_o=rays_o, rays_d=rays_d,
-            near=0.5, far=6.0, n_samples_per_ray=64, rand=False)
-
-    plt.figure(dpi=200)
-    plt.subplot(121)
-    plt.imshow(rgb.detach().cpu().reshape(H, W, 3).numpy())
-    plt.axis('off')
-    plt.subplot(122)
-    plt.plot(loss_history)
-    plt.show()
+    return best_model_weights
