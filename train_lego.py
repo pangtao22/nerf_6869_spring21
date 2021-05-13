@@ -8,8 +8,8 @@ from lego_dataset import LegoDataset
 
 # %% Dataloader
 # Original resolution is (800, 800).
-H_img = 400
-W_img = 400
+H_img = 512
+W_img = 512
 data_transform = transforms.Compose([
     transforms.Resize((H_img, W_img)),
     transforms.ToTensor(),
@@ -48,8 +48,8 @@ plt.show()
 # %% train network
 D_network = 8
 W_network = 256
-l_embed = 8
-num_epochs = 10
+l_embed = 10
+num_epochs = 1001
 
 X_WC_validation = torch.tensor([
         [6.8935e-01,  5.3373e-01, -4.8982e-01,  -1.9745e+00],
@@ -62,8 +62,8 @@ model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
 best_model_weights = train_nerf(model, dataloader, optimizer,
-                                n_epochs=num_epochs, n_rays=2048,
-                                n_samples_per_ray=128,
+                                n_epochs=num_epochs, n_rays_per_batch=1600,
+                                n_samples_per_ray=192,
                                 H_img=H_img, W_img=W_img, focal=focal,
                                 X_WC_validation=X_WC_validation,
                                 epochs_per_plot=10, lr_decay=True)

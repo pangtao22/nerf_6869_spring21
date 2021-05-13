@@ -6,3 +6,5 @@ data
 results
 __pycache__
 *.npz
+venv
+*.pickle

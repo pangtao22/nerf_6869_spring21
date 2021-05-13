@@ -29,12 +29,16 @@ plt.imshow(np_img)
 plt.axis('off')
 plt.show()
 
+
+#%%
+np
+
 #%%
 sampled_image = np.zeros_like(np_img)
 sampled_image = sampled_image.reshape((-1, 3))
-idx_selected = np.random.choice(H * W, 4096, replace=False)
+idx_selected = np.random.choice(H * W, 8192, replace=False)
 sampled_image[idx_selected] = np_img.reshape((-1, 3))[idx_selected]
-sampled_image.resize((H, W, 3))
+sampled_image = sampled_image.reshape((H, W, 3))
 
 plt.figure(dpi=200)
 plt.imshow(sampled_image)
@@ -46,14 +50,14 @@ plt.show()
 D_network = 8
 W_network = 256
 l_embed = 6
-num_epochs = 10
+num_epochs = 11
 
 model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
              skips={5})
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
 best_model_weights = train_nerf(model, dataloader, optimizer,
-                                n_epochs=num_epochs, n_rays=4096,
+                                n_epochs=num_epochs, n_rays_per_batch=4096,
                                 n_samples_per_ray=64,
                                 H_img=H, W_img=W, focal=focal,
                                 X_WC_validation=X_WC_validation,
