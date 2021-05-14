@@ -77,6 +77,43 @@ class Nerf(torch.nn.Module):
 
         return self.output_layer(h)
 
+    def load_weights_from_keras(self, weights):
+        assert self.use_dir
+
+        # load first D_network layers.
+        for i in range(self.D_network):
+            idx = i * 2
+            assert (self.linear_layers[i].weight.data.shape ==
+                    weights[idx].T.shape)
+            self.linear_layers[i].weight.data = torch.from_numpy(
+                weights[idx].T)
+            self.linear_layers[i].bias.data = torch.from_numpy(
+                weights[idx + 1])
+
+        # load feature layer.
+        idx = 2 * self.D_network
+        assert self.feature_linear.weight.data.shape == weights[idx].T.shape
+        self.feature_linear.weight.data = torch.from_numpy(weights[idx].T)
+        self.feature_linear.bias.data = torch.from_numpy(weights[idx + 1])
+
+        # load views layer.
+        idx = 2 * self.D_network + 2
+        assert self.views_linear[0].weight.data.shape == weights[idx].T.shape
+        self.views_linear[0].weight.data = torch.from_numpy(weights[idx].T)
+        self.views_linear[0].bias.data = torch.from_numpy(weights[idx + 1])
+
+        # load rgb_linear
+        idx = 2 * self.D_network + 4
+        assert self.rgb_linear.weight.data.shape == weights[idx].T.shape
+        self.rgb_linear.weight.data = torch.from_numpy(weights[idx].T)
+        self.rgb_linear.bias.data = torch.from_numpy(weights[idx + 1])
+
+        # load alpha_linear
+        idx = 2 * self.D_network + 6
+        assert self.alpha_linear.weight.data.shape == weights[idx].T.shape
+        self.alpha_linear.weight.data = torch.from_numpy(weights[idx].T)
+        self.alpha_linear.bias.data = torch.from_numpy(weights[idx + 1])
+
 
 def encode(x, l_embed):
     """

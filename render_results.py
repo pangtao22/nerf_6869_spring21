@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import PIL
@@ -46,17 +47,28 @@ def pose_spherical(theta, phi, radius):
 # %% load weights
 D_network = 8
 W_network = 256
-l_embed = 10
+l_embed_pos = 10
+l_embed_dir = 4
 
 model_ft = Nerf(D_network=D_network, W_network=W_network,
-                l_embed_pos=l_embed, skips={5})
+                l_embed_pos=l_embed_pos, l_embed_dir=l_embed_dir, skips={5})
+
+model_weights_dir = 'pos_embed10_depth8_width256'
+model_weights_file_name = (
+    'weights_best_d8_w256_skip5_lembed10_sample_per_ray_192_1000epochs.pt')
 
 model_ft.load_state_dict(
     torch.load(
         os.path.join(
-            'training_log', 'pos_embed10_depth8_width256',
-            'weights_best_d8_w256_skip5_lembed10_sample_per_ray_192_1000epochs.pt')))
+            'training_log', model_weights_dir, model_weights_file_name)))
 model_ft.to(device)
+
+#%% load poses from test json file.
+test_poses_path = os.path.join(
+    os.getcwd(), 'data', 'lego', 'transforms_test.json')
+with open(test_poses_path, 'r') as f:
+    test_poses_dict = json.load(f)
+
 
 # %% video
 H = 400
@@ -67,28 +79,32 @@ frames = []
 images_dict = {
     "H": H, "W": W, "focal": focal, "rgb": [], "depth": [], "acc": [],
     "X_WC": []}
-for th in tqdm(np.linspace(0., 360., 120, endpoint=False)):
-    c2w = pose_spherical(th, -30., 4.)
-    img, img_d, img_acc = render_image(model_ft, H, W, focal, 192, c2w)
+
+# for th in tqdm(np.linspace(0., 360., 120, endpoint=False)):
+#     c2w = pose_spherical(th, -30., 4.)
+
+for frame in test_poses_dict['frames']:
+    X_WC = torch.tensor(frame['transform_matrix'], dtype=torch.float32)
+    img, img_d, img_acc = render_image(model_ft, H, W, focal, 192, X_WC)
     images_dict['rgb'].append(img)
     images_dict['depth'].append(img_d)
     images_dict['acc'].append(img_acc)
-    images_dict['X_WC'].append(c2w)
+    images_dict['X_WC'].append(X_WC)
     frames.append((255 * img).astype(np.uint8))
 
 f = 'video.mp4'
-imageio.mimwrite(f, frames, fps=30, quality=7)
+imageio.mimwrite(f, frames, fps=30, quality=10)
 with open('rgbd_images_dict.pickle', 'wb') as f:
     pickle.dump(images_dict, f)
 
 # %% render image at higher resolution
-c2w = torch.tensor([
+X_WC = torch.tensor([
     [6.8935e-01, 5.3373e-01, -4.8982e-01, -1.9745e+00],
     [-7.2443e-01, 5.0789e-01, -4.6611e-01, -1.8789e+00],
     [1.4901e-08, 6.7615e-01, 7.3676e-01, 2.9700e+00],
     [0.0000e+00, 0.0000e+00, 0.0000e+00, 1.0000e+00]])
 
-img, img_d, img_acc = render_image(model_ft, H, W, focal, 192, c2w)
+img, img_d, img_acc = render_image(model_ft, H * 2, W * 2, focal * 2, 256, X_WC)
 
 #%%
 plt.figure(dpi=200)
