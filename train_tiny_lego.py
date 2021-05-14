@@ -30,8 +30,6 @@ plt.axis('off')
 plt.show()
 
 
-#%%
-np
 
 #%%
 sampled_image = np.zeros_like(np_img)
