@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 class TinyLegoDataset(Dataset):
     def __init__(self, transform):
-        data = np.load('tiny_nerf_data.npz')
+        data = np.load('data/tiny_nerf_data.npz')
         images = data['images']
         poses = data['poses']
         self.focal = data['focal']

@@ -48,10 +48,23 @@ def pose_spherical(theta, phi, radius):
 D_network = 8
 W_network = 256
 l_embed_pos = 10
-l_embed_dir = 4
+l_embed_dir = None
 
 model_ft = Nerf(D_network=D_network, W_network=W_network,
                 l_embed_pos=l_embed_pos, l_embed_dir=l_embed_dir, skips={5})
+
+#%% load pre-trained weights
+pre_trained_weights_path = os.path.join(
+    os.getcwd(), 'pre_trained', 'lego_example', 'model_fine_200000.npy')
+with open(pre_trained_weights_path, 'rb') as f:
+    weights = np.load(f, allow_pickle=True)
+model_ft.load_weights_from_keras(weights)
+model_ft.to(device)
+
+
+#%% load weights trained by me.
+# model_weights_dir = 'pos_embed10_dir_embed4_depth_8_width256'
+# model_weights_file_name = 'weights_best.pt'
 
 model_weights_dir = 'pos_embed10_depth8_width256'
 model_weights_file_name = (
@@ -83,7 +96,7 @@ images_dict = {
 # for th in tqdm(np.linspace(0., 360., 120, endpoint=False)):
 #     c2w = pose_spherical(th, -30., 4.)
 
-for frame in test_poses_dict['frames']:
+for frame in tqdm(test_poses_dict['frames']):
     X_WC = torch.tensor(frame['transform_matrix'], dtype=torch.float32)
     img, img_d, img_acc = render_image(model_ft, H, W, focal, 192, X_WC)
     images_dict['rgb'].append(img)
@@ -117,4 +130,10 @@ img_d_new = img_d_new.reshape(img_d.shape)
 plt.imshow(img_d_new, cmap='gray')
 plt.subplot(133)
 plt.imshow(img_acc, cmap='gray')
+plt.show()
+
+
+#%%
+plt.figure(dpi=200)
+plt.imshow(img)
 plt.show()

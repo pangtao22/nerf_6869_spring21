@@ -229,7 +229,7 @@ def render_image(model, H_img, W_img, focal_img, n_samples_per_ray, X_WC):
 
     with torch.no_grad():
         rays_o, rays_d = get_rays(H_img, W_img, focal_img, X_WC)
-        n_rays_per_batch = 20000
+        n_rays_per_batch = 10000
         for i in range(0, H_img * W_img, n_rays_per_batch):
             i_end = min(H_img * W_img, i + n_rays_per_batch)
             ray_indices = np.arange(i, i_end)

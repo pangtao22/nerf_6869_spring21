@@ -13,6 +13,7 @@ vis = meshcat.Visualizer('tcp://127.0.0.1:6000')
 
 from lego_dataset import LegoDataset
 
+
 def AddTriad(vis, name, prefix, length=1., radius=0.04, opacity=1.):
     """
     Initializes coordinate axes of a frame T. The x-axis is drawn red,
@@ -49,7 +50,19 @@ def AddTriad(vis, name, prefix, length=1., radius=0.04, opacity=1.):
 
 
 #%% load test data.
-with open('rgbd_images_dict.pickle', 'rb') as f:
+# img_dict_path = os.path.join(
+#     'results', 'pos_embed10_dir_embed4_depth_8_width256',
+#     'rgbd_images_dict.pickle')
+
+# img_dict_path = os.path.join(
+#     'results', 'pre_trained_weights',
+#     'rgbd_images_dict.pickle')
+
+img_dict_path = os.path.join(
+    'results', '8layer_10encoding_1000epochs',
+    'rgbd_images_dict.pickle')
+
+with open(img_dict_path, 'rb') as f:
     rgbd_img_dict = pickle.load(f)
 
 
@@ -136,7 +149,6 @@ for i in range(0, 120):
     vis['frames/{}'.format(i)].set_transform(X_WC)
 
     # open3d
-    img_rgb
     img_d_new2 = (K2 @ p_C).astype(np.float32)
     img_d_new2 = img_d_new2[2].reshape((H, W))
     img_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
