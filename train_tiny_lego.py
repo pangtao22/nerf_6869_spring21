@@ -50,7 +50,7 @@ W_network = 256
 l_embed = 6
 num_epochs = 11
 
-model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
+model = Nerf(D_network=D_network, W_network=W_network, l_embed_pos=l_embed,
              skips={5})
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
@@ -58,5 +58,5 @@ best_model_weights = train_nerf(model, dataloader, optimizer,
                                 n_epochs=num_epochs, n_rays_per_batch=4096,
                                 n_samples_per_ray=64,
                                 H_img=H, W_img=W, focal=focal,
-                                X_WC_validation=X_WC_validation,
+                                X_WC_example=X_WC_validation,
                                 lr_decay=False)

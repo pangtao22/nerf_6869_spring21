@@ -39,7 +39,7 @@ class LegoDataset(Dataset):
                     frame['file_path'][2:] + '_depth_0001.png')
                 self.imgs_d.append(PIL.Image.open(img_d_path))
             else:
-                self.imgs_rgb[-1].convert('RGB')
+                self.imgs_rgb[-1] = self.imgs_rgb[-1].convert('RGB')
 
         camera_angle_x = data_dict['camera_angle_x']
         self.focal = self.imgs_rgb[0].width / 2 / np.tan(camera_angle_x / 2)

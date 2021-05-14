@@ -49,7 +49,7 @@ W_network = 256
 l_embed = 10
 
 model_ft = Nerf(D_network=D_network, W_network=W_network,
-                l_embed=l_embed, skips={5})
+                l_embed_pos=l_embed, skips={5})
 
 model_ft.load_state_dict(
     torch.load(

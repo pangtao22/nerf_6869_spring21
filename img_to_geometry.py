@@ -49,39 +49,37 @@ def AddTriad(vis, name, prefix, length=1., radius=0.04, opacity=1.):
 
 
 #%% load test data.
-# with open('rgbd_images_dict.pickle', 'rb') as f:
-#     rgbd_img_dict = pickle.load(f)
+with open('rgbd_images_dict.pickle', 'rb') as f:
+    rgbd_img_dict = pickle.load(f)
 
 
 #%% load test data into dict.
-data_transform = transforms.Compose([
-    transforms.ToTensor(),
-])
-
-lego_dataset = LegoDataset("test", data_transform)
-
-#%%
-dataloader = torch.utils.data.DataLoader(lego_dataset, batch_size=1,
-                                         shuffle=False)
-
-# build dict from dataloader.
-rgbd_img_dict = {}
-rgbd_img_dict['W'] = lego_dataset.get_W()
-rgbd_img_dict['H'] = lego_dataset.get_H()
-rgbd_img_dict['focal'] = lego_dataset.get_focal()
-rgbd_img_dict['rgb'] = []
-rgbd_img_dict['depth'] = []
-rgbd_img_dict['acc'] = []
-rgbd_img_dict['X_WC'] = []
-
-for img_rgba, X_WC, img_d in dataloader:
-    img_a = img_rgba[0, 3]
-    img_rgb = img_rgba[0, :3]
-    rgbd_img_dict['rgb'].append(np.ascontiguousarray(
-        (img_rgb * img_a).permute(1, 2, 0).numpy()))
-    rgbd_img_dict['acc'].append(np.ascontiguousarray(img_a.numpy()))
-    rgbd_img_dict['depth'].append(np.ascontiguousarray(img_d[0, 0].numpy()))
-    rgbd_img_dict['X_WC'].append(X_WC[0])
+# data_transform = transforms.Compose([
+#     transforms.ToTensor(),
+# ])
+#
+# lego_dataset = LegoDataset("test", data_transform)
+# dataloader = torch.utils.data.DataLoader(lego_dataset, batch_size=1,
+#                                          shuffle=False)
+#
+# # build dict from dataloader.
+# rgbd_img_dict = {}
+# rgbd_img_dict['W'] = lego_dataset.get_W()
+# rgbd_img_dict['H'] = lego_dataset.get_H()
+# rgbd_img_dict['focal'] = lego_dataset.get_focal()
+# rgbd_img_dict['rgb'] = []
+# rgbd_img_dict['depth'] = []
+# rgbd_img_dict['acc'] = []
+# rgbd_img_dict['X_WC'] = []
+#
+# for img_rgba, X_WC, img_d in dataloader:
+#     img_a = img_rgba[0, 3]
+#     img_rgb = img_rgba[0, :3]
+#     rgbd_img_dict['rgb'].append(np.ascontiguousarray(
+#         (img_rgb * img_a).permute(1, 2, 0).numpy()))
+#     rgbd_img_dict['acc'].append(np.ascontiguousarray(img_a.numpy()))
+#     rgbd_img_dict['depth'].append(np.ascontiguousarray(img_d[0, 0].numpy()))
+#     rgbd_img_dict['X_WC'].append(X_WC[0])
 
 
 #%%

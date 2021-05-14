@@ -17,41 +17,68 @@ else:
 
 class Nerf(torch.nn.Module):
     def __init__(self, D_network: int, W_network: int,
-                 l_embed: int, skips: set):
+                 l_embed_pos: int, skips: set, l_embed_dir: int = None):
         super(Nerf, self).__init__()
         self.D_network = D_network
         self.W_network = W_network
-        self.l_embed = l_embed
+        self.l_embed_pos = l_embed_pos
+        self.l_embed_dir = l_embed_dir
+        self.skips = skips
 
-        self.n_input = 3 * (1 + 2 * l_embed)
-        layers_list = [torch.nn.Linear(self.n_input, W_network)]
+        self.n_pos_input = 3 * (1 + 2 * l_embed_pos)
+        layers_list = [torch.nn.Linear(self.n_pos_input, W_network)]
         for i in range(1, D_network):
             if i in skips:
                 layers_list.append(
-                    torch.nn.Linear(W_network + self.n_input, W_network))
+                    torch.nn.Linear(W_network + self.n_pos_input, W_network))
             else:
                 layers_list.append(torch.nn.Linear(W_network, W_network))
         self.linear_layers = torch.nn.ModuleList(layers_list)
 
-        self.output_layer = torch.nn.Linear(W_network, 4)
-        self.skips = skips
+        if l_embed_dir is not None:
+            self.use_dir = True
+            self.n_dir_input = 3 * (1 + 2 * l_embed_dir)
+
+            self.views_linear = torch.nn.ModuleList(
+                [torch.nn.Linear(W_network + self.n_dir_input, W_network // 2)])
+            self.feature_linear = torch.nn.Linear(W_network, W_network)
+            self.alpha_linear = torch.nn.Linear(W_network, 1)
+            self.rgb_linear = torch.nn.Linear(W_network // 2, 3)
+        else:
+            self.use_dir = False
+            self.n_dir_input = 0
+            self.output_layer = torch.nn.Linear(W_network, 4)
 
     def forward(self, x):
         """
         :param x: (self.n_input,)
         :return:
         """
-        h = x
+        input_pos, input_dir = torch.split(
+            x, [self.n_pos_input, self.n_dir_input], dim=-1)
+        h = input_pos
         for i, l in enumerate(self.linear_layers):
             h = l(h)
             h = F.relu(h)
             if i + 1 in self.skips:
-                h = torch.cat([x, h], dim=-1)
+                h = torch.cat([input_pos, h], dim=-1)
+
+        if self.use_dir:
+            alpha = self.alpha_linear(h)
+            feature = self.feature_linear(h)
+
+            h = torch.cat([feature, input_dir], dim=-1)
+            for l in self.views_linear:
+                h = l(h)
+                h = F.relu(h)
+
+            rgb = self.rgb_linear(h)
+            return torch.cat([rgb, alpha], -1)
 
         return self.output_layer(h)
 
 
-def encode_position(x, l_embed):
+def encode(x, l_embed):
     """
     :param x shape (H * W * n_samples, 3)
     :return: shape (H * W * n_samples, 3 * (1 + 2 * l_embed)
@@ -88,10 +115,10 @@ def get_rays(H, W, focal, X_WC):
     return rays_o, rays_d
 
 
-def run_network_on_points(model, pts, batch_size: int):
-    n_pts = pts.shape[0]
-    return torch.cat([model(pts[i: i + batch_size])
-                      for i in range(0, n_pts, batch_size)])
+def run_network_on_points(model, inputs, batch_size: int):
+    n_pts = inputs.shape[0]
+    return torch.cat(
+        [model(inputs[i: i + batch_size]) for i in range(0, n_pts, batch_size)])
 
 
 def render_rays(model: Nerf, rays_o, rays_d, near, far,
@@ -116,10 +143,19 @@ def render_rays(model: Nerf, rays_o, rays_d, near, far,
 
     # Run network.
     # pts_flat shape: (n_rays * n_samples, 3)
-    pts_flat = encode_position(torch.reshape(pts, [-1, 3]),
-                               l_embed=model.l_embed)
+    pts_flat = encode(torch.reshape(pts, [-1, 3]), l_embed=model.l_embed_pos)
     pts_flat = pts_flat.to(device)
-    raw = run_network_on_points(model, pts_flat,
+
+    if model.use_dir:
+        dirs = rays_d / torch.norm(rays_d, dim=1, keepdim=True)
+        dirs = dirs[:, None].expand(pts.shape)
+        dirs_flat = encode(torch.reshape(dirs, [-1, 3]),
+                           l_embed=model.l_embed_dir)
+        inputs = torch.cat([pts_flat, dirs_flat], dim=-1)
+    else:
+        inputs = pts_flat
+
+    raw = run_network_on_points(model, inputs,
                                 batch_size=min(pts_flat.shape[0], 32 * 1024))
     raw = raw.reshape([n_rays, n_samples_per_ray, 4])
 
@@ -178,7 +214,7 @@ def render_image(model, H_img, W_img, focal_img, n_samples_per_ray, X_WC):
 def train_nerf(model: Nerf, dataloader, optimizer,
                n_epochs: int, n_rays_per_batch: int,
                n_samples_per_ray: int, H_img: int, W_img: int, focal: float,
-               X_WC_validation, epochs_per_plot: int = 1, lr_decay=True):
+               X_WC_example, epochs_per_plot: int = 1, lr_decay=True):
 
     best_model_weights = copy.deepcopy(model.state_dict())
     model.to(device)
@@ -248,7 +284,7 @@ def train_nerf(model: Nerf, dataloader, optimizer,
         img, img_d, img_acc = render_image(
             model, H_img=H_img // 2, W_img=W_img // 2,
             focal_img=focal / 2, n_samples_per_ray=128,
-            X_WC=X_WC_validation)
+            X_WC=X_WC_example)
 
         plt.figure(dpi=200)
         plt.subplot(221)
@@ -256,8 +292,10 @@ def train_nerf(model: Nerf, dataloader, optimizer,
         plt.axis('off')
         plt.subplot(222)
         plt.imshow(img_d, cmap='gray')
+        plt.axis('off')
         plt.subplot(223)
         plt.imshow(img_acc, cmap='gray')
+        plt.axis('off')
         plt.subplot(224)
         plt.plot(loss_history)
         plt.title('epoch {}, loss = {}'.format(epoch, epoch_loss))

@@ -48,7 +48,8 @@ plt.show()
 # %% train network
 D_network = 8
 W_network = 256
-l_embed = 10
+l_embed_pos = 10
+l_embed_dir = 4
 num_epochs = 1001
 
 X_WC_validation = torch.tensor([
@@ -57,15 +58,15 @@ X_WC_validation = torch.tensor([
         [ 1.4901e-08,  6.7615e-01,  7.3676e-01,  2.9700e+00],
         [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  1.0000e+00]])
 
-model = Nerf(D_network=D_network, W_network=W_network, l_embed=l_embed,
-             skips={5})
+model = Nerf(D_network=D_network, W_network=W_network, l_embed_pos=l_embed_pos,
+             l_embed_dir=l_embed_dir, skips={5})
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
 
 best_model_weights = train_nerf(model, dataloader, optimizer,
-                                n_epochs=num_epochs, n_rays_per_batch=1600,
+                                n_epochs=num_epochs, n_rays_per_batch=1200,
                                 n_samples_per_ray=192,
                                 H_img=H_img, W_img=W_img, focal=focal,
-                                X_WC_validation=X_WC_validation,
+                                X_WC_example=X_WC_validation,
                                 epochs_per_plot=10, lr_decay=True)
 
 torch.save(best_model_weights, 'weights_best{}.pt'.format(time.asctime()))
