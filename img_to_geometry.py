@@ -54,13 +54,13 @@ def AddTriad(vis, name, prefix, length=1., radius=0.04, opacity=1.):
 #     'results', 'pos_embed10_dir_embed4_depth_8_width256',
 #     'rgbd_images_dict.pickle')
 
-# img_dict_path = os.path.join(
-#     'results', 'pre_trained_weights',
-#     'rgbd_images_dict.pickle')
-
 img_dict_path = os.path.join(
-    'results', '8layer_10encoding_1000epochs',
+    'results', 'pre_trained_weights',
     'rgbd_images_dict.pickle')
+
+# img_dict_path = os.path.join(
+#     'results', '8layer_10encoding_1000epochs',
+#     'rgbd_images_dict.pickle')
 
 with open(img_dict_path, 'rb') as f:
     rgbd_img_dict = pickle.load(f)

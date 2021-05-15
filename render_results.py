@@ -2,6 +2,7 @@ import json
 import os
 import pickle
 import PIL
+
 import imageio
 
 from nerf_torch import *
@@ -54,12 +55,12 @@ model_ft = Nerf(D_network=D_network, W_network=W_network,
                 l_embed_pos=l_embed_pos, l_embed_dir=l_embed_dir, skips={5})
 
 #%% load pre-trained weights
-pre_trained_weights_path = os.path.join(
-    os.getcwd(), 'pre_trained', 'lego_example', 'model_fine_200000.npy')
-with open(pre_trained_weights_path, 'rb') as f:
-    weights = np.load(f, allow_pickle=True)
-model_ft.load_weights_from_keras(weights)
-model_ft.to(device)
+# pre_trained_weights_path = os.path.join(
+#     os.getcwd(), 'pre_trained', 'lego_example', 'model_fine_200000.npy')
+# with open(pre_trained_weights_path, 'rb') as f:
+#     weights = np.load(f, allow_pickle=True)
+# model_ft.load_weights_from_keras(weights)
+# model_ft.to(device)
 
 
 #%% load weights trained by me.
@@ -75,6 +76,13 @@ model_ft.load_state_dict(
         os.path.join(
             'training_log', model_weights_dir, model_weights_file_name)))
 model_ft.to(device)
+
+#%% volume rendering
+sigma = render_volume(model_ft, 256)
+
+#%%
+
+
 
 #%% load poses from test json file.
 test_poses_path = os.path.join(

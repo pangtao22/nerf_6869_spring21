@@ -248,6 +248,44 @@ def render_image(model, H_img, W_img, focal_img, n_samples_per_ray, X_WC):
     return img_rgb, img_d, img_acc
 
 
+def render_volume(model: Nerf, n_pts_per_axis: int):
+    t = np.linspace(-1.2, 1.2, n_pts_per_axis + 1)
+    pts = np.stack(np.meshgrid(t, t, t), -1).astype(np.float32)
+    pts_flat = pts.reshape([-1, 3])
+    n_pts = pts_flat.shape[0]
+
+    batch_pts_size = 32 * 1024 * 8
+    raw = torch.zeros(n_pts, 4, dtype=torch.float32)
+
+    for i in range(0, n_pts, batch_pts_size):
+
+        pts_flat_i = encode(
+            torch.from_numpy(pts_flat[i: i + batch_pts_size]),
+            l_embed=model.l_embed_pos)
+        if model.use_dir:
+            # evaluating alpha doesn't need direction.
+            dirs_flat_i = torch.zeros(pts_flat_i.shape[0], 3)
+            dirs_flat_i = encode(torch.reshape(dirs_flat_i, [-1, 3]),
+                                 l_embed=model.l_embed_dir)
+            inputs = torch.cat([pts_flat_i, dirs_flat_i], dim=-1)
+        else:
+            inputs = pts_flat_i
+
+        inputs = inputs.to(device)
+        with torch.no_grad():
+            raw_i = run_network_on_points(
+                model, inputs, batch_size=min(pts_flat.shape[0], 32 * 1024))
+
+        raw[i: i + batch_pts_size] = raw_i.cpu()
+
+    raw = raw.reshape(
+        [n_pts_per_axis + 1, n_pts_per_axis + 1, n_pts_per_axis + 1, 4])
+    sigma = raw[..., -1].numpy()
+    sigma = np.maximum(sigma, 0.)
+
+    return sigma
+
+
 def train_nerf(model: Nerf, dataloader, optimizer,
                n_epochs: int, n_rays_per_batch: int,
                n_samples_per_ray: int, H_img: int, W_img: int, focal: float,
