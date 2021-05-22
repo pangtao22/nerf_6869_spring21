@@ -15,3 +15,11 @@ When synthesizing images from new views, a direction-agnostic NerF network appea
 
 
 ## Geometry Reconstruction
+However, a direction-agnostic NeRF may learn direction-dependent color by adding extraneous geometry to the scene, making the reconstructed geometry inaccurate, as shown in the figures below. (click on the images to view the full point cloud in 3D, which takes a while to load but looks cool!)
+
+#### Point cloud generated from a direction-angostic NeRF network.
+[![name](./media/point_cloud_position_only.png)](https://pangtao22.github.io/html_figures/nerf_6869_projects/position_only/position_only_point_cloud.html)
+
+#### Point cloud generated from a direction-dependent NeRF network.
+[![name](./media/point_cloud_position_and_orientation.png)](https://pangtao22.github.io/html_figures/nerf_6869_projects/position_and_direction/position_and_direction_point_cloud.html)
+
