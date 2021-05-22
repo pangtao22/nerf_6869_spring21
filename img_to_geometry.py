@@ -50,13 +50,13 @@ def AddTriad(vis, name, prefix, length=1., radius=0.04, opacity=1.):
 
 
 #%% load test data.
-# img_dict_path = os.path.join(
-#     'results', 'pos_embed10_dir_embed4_depth_8_width256',
-#     'rgbd_images_dict.pickle')
-
 img_dict_path = os.path.join(
-    'results', 'pre_trained_weights',
+    'results', 'pos_embed10_dir_embed4_depth_8_width256',
     'rgbd_images_dict.pickle')
+
+# img_dict_path = os.path.join(
+#     'results', 'pre_trained_weights',
+#     'rgbd_images_dict.pickle')
 
 # img_dict_path = os.path.join(
 #     'results', '8layer_10encoding_1000epochs',
@@ -119,7 +119,7 @@ volume = o3d.pipelines.integration.ScalableTSDFVolume(
     sdf_trunc=0.04,
     color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
 
-for i in range(0, 120):
+for i in range(0, len(rgbd_img_dict['acc']), 8):
     img_rgb = rgbd_img_dict['rgb'][i]
     img_d = rgbd_img_dict['depth'][i]
     img_acc = rgbd_img_dict['acc'][i]
@@ -143,7 +143,7 @@ for i in range(0, 120):
     name = 'pcd/{}'.format(i)
     vis[name].set_object(
         meshcat.geometry.PointCloud(
-            p_W, img_rgb.reshape((H * W, 3))[indices].T))
+            p_W, img_rgb.reshape((H * W, 3))[indices].T, size=0.005))
     vis[name].set_transform(np.eye(4))
     AddTriad(vis, str(i), "frames", length=0.15, radius=0.005, opacity=1)
     vis['frames/{}'.format(i)].set_transform(X_WC)
@@ -174,3 +174,20 @@ plt.subplot(132)
 plt.imshow(img_d_new, cmap='gray')
 plt.subplot(133)
 plt.imshow(img_acc, cmap='gray')
+
+#%%
+res = vis.static_html()
+with open('position_and_direction_point_cloud.html', 'w') as f:
+    f.write(res)
+
+
+#%%
+vis.delete()
+vis['mesh'].set_object(
+    meshcat.geometry.ObjMeshGeometry.from_file(
+        'position_and_direction_mesh_from_marching_cubes.obj'),
+    meshcat.geometry.MeshLambertMaterial(color=0xC0C0C0, opacity=1)
+)
+
+# overlay training set camera poses.
+
